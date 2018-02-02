@@ -36,8 +36,8 @@ class PLYParser:
                          'SIN': self.df_sin,
                          'LOG10': self.df_log10,
                          'LOG': self.df_log,
-                         'STDEVP': self.df_stdevp,
-                         'STDEVS': self.df_stdevs}
+                         'STDEV.P': self.df_stdevp,
+                         'STDEV.S': self.df_stdevs}
     self.error_list=[]
     # Build the lex, yacc
     lex.lex(module=self)
@@ -134,7 +134,7 @@ class PLYParser:
 
   @staticmethod
   def df_stdevs(sub_df):
-    """Get the population standard deviation"""
+    """Get the sample standard deviation"""
     return sub_df.std()
 
   def calc(self):
@@ -262,7 +262,7 @@ class Excel2Pd(PLYParser):
 
   @staticmethod
   def t_error(t):
-    logging.error("Illegal character '%s'", t.value[0])
+    # logging.error("Illegal character '%s'", t.value[0])
     t.lexer.skip(1)
 
   precedence = (('left', 'AND', 'OR'),
