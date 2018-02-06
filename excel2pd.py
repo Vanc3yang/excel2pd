@@ -149,9 +149,10 @@ class PLYParser:
       if to_match[0] not in ['<', '>']:
         to_match = '=' + to_match
       countif_match = re.compile(
-          r"^(?P<operator>[=><[<>]]?)(?P<variable>\[.*?\])?(?P<non_variable>[A-Za-z0-9]*)?")
+          r"^(?P<operator>[=><[<>]]?)(?P<negative>\-)?(?P<variable>\[.*?\])?(?P<non_variable>[A-Za-z0-9]*)?")
       match_expr = re.match(countif_match, to_match)
       operator = match_expr.group("operator")
+      negative = match_expr.group("negative")
       variable = match_expr.group("variable")
       # If variable is none, compared to a string, else get the variable
       if variable is not None:
@@ -292,11 +293,11 @@ class Excel2Pd(PLYParser):
     'LPAREN', 'RPAREN', 'BYROW')
   # Map var names
   t_VARNAME = r'\[.*?\]'
-  t_CONSTANT = r'\d+'
+  t_CONSTANT = r'\-?\d+'
   t_STRING = r'\"[\u4e00-\u9fa5a-zA-Z0-9\;]*\"'
   # Map operators and symbols
   t_PLUS = r'\+'
-  t_MINUS = r'-'
+  t_MINUS = r'\-'
   t_TIMES = r'\*'
   t_DIVIDE = r'/'
   t_LPAREN = r'\('
@@ -311,7 +312,7 @@ class Excel2Pd(PLYParser):
   t_NE = r'\<\>'
   t_AND = r'\&'
   t_OR = r'\|'
-  t_COUNTIF = r'\"[><[<>]]?\[?[a-zA-Z0-9]*\]?\"'
+  t_COUNTIF = r'\"[><[<>]]?\-?\[?[a-zA-Z0-9]*\]?\"'
   # Map function use token decorator
   @staticmethod
   @lex.TOKEN('|'.join(excel_funs))
@@ -425,7 +426,13 @@ class Excel2Pd(PLYParser):
   @staticmethod
   def p_constant(p):
     """constant : CONSTANT"""
-    p[0] = float(p[1])
+    if p[1][0] == "-":
+
+        p[0] = -float(p[1][1:])
+
+    else:
+            
+        p[0] = float(p[1])
 
   @staticmethod
   def p_string(p):
