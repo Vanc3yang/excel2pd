@@ -37,7 +37,9 @@ class PLYParser:
                          'LOG10': self.df_log10,
                          'LOG': self.df_log,
                          'STDEV.P': self.df_stdevp,
-                         'STDEV.S': self.df_stdevs}
+                         'STDEV.S': self.df_stdevs,
+                         'SUBSTITUTE': self.df_substitute,
+                         'COUNTIF': self.df_countif}
     self.error_list=[]
     # Build the lex, yacc
     lex.lex(module=self)
@@ -137,6 +139,69 @@ class PLYParser:
     """Get the sample standard deviation"""
     return sub_df.std()
 
+  def df_countif(self, condition):
+    """Excute COUNTIF statement"""
+    try:
+      sub_df = condition['condition']
+      if isinstance(condition['value'], str):
+        to_match = condition['value'].strip("\"")
+      # if first not <>
+      if to_match[0] not in ['<', '>']:
+        to_match = '=' + to_match
+      countif_match = re.compile(
+          r"^(?P<operator>[=><[<>]]?)(?P<variable>\[.*?\])?(?P<non_variable>[A-Za-z0-9]*)?")
+      match_expr = re.match(countif_match, to_match)
+      operator = match_expr.group("operator")
+      variable = match_expr.group("variable")
+      # If variable is none, compared to a string, else get the variable
+      if variable is not None:
+        to_compare = self.assign(re.sub(r'[\[\]]', '', variable))
+      else:
+        to_compare = match_expr.group('non_variable')
+      if operator == '=':
+        sub_df = pd.Series(
+          np.repeat(sub_df[sub_df == to_compare].count(), sub_df.shape[0]))
+      elif operator == '>':
+        sub_df = pd.Series(np.repeat(sub_df[sub_df > float(to_compare)].count(),
+                                   sub_df.shape[0]))
+      elif operator == '>=':
+        sub_df = pd.Series(np.repeat(sub_df[sub_df >= float(to_compare)].count(),
+                                   sub_df.shape[0]))
+      elif operator == '<':
+        sub_df = pd.Series(np.repeat(sub_df[sub_df < float(to_compare)].count(),
+                                   sub_df.shape[0]))
+      elif operator == '<=':
+        sub_df = pd.Series(np.repeat(sub_df[sub_df <= float(to_compare)].count(),
+                                   sub_df.shape[0]))
+      elif operator == '<>':
+        sub_df = pd.Series(
+            np.repeat(sub_df[sub_df != to_compare].count(), sub_df.shape[0]))
+    except:
+      self.error_list.append(
+        'There are problems with IF statements, the error message is:',
+        sys.exc_info()[0])
+      return None
+    else:
+      return sub_df
+
+  def df_substitute(self, condition):
+    """Excute SUBSTITUTE statement"""
+    try:
+      if type(condition['value1']) == type(condition['value2']) == str:
+        sub_df = condition['condition'].str.replace(condition['value1'],
+                                                    condition['value2'])
+      elif type(condition['value1']) == type(condition['value2']) in (
+          int, float, complex):
+        sub_df = condition['condition'].replace(condition['value1'],
+                                                condition['value2'])
+    except:
+      self.error_list.append(
+          'There are problems with IF statements, the error message is:',
+          sys.exc_info()[0])
+      return None
+    else:
+      return sub_df
+
   def calc(self):
     for config in self.configs:
       # remove space
@@ -222,13 +287,13 @@ class Excel2Pd(PLYParser):
                 'XNPV', 'XOR', 'YEAR', 'YEARFRAC']
   excel_funs.sort(reverse=True)
   tokens = (
-  'VARNAME', 'CONSTANT', 'STRING', 'FUNCTION', 'PLUS', 'MINUS', 'TIMES',
-  'DIVIDE', 'GE', 'GT', 'LE', 'LT', 'EQ', 'NE','AND', 'OR', 'LPAREN', 'RPAREN',
-  'BYROW')
+    'VARNAME', 'CONSTANT', 'STRING', 'FUNCTION', 'PLUS', 'MINUS', 'TIMES',
+    'DIVIDE', 'GE', 'GT', 'LE', 'LT', 'EQ', 'NE', 'AND', 'OR', 'COUNTIF',
+    'LPAREN', 'RPAREN', 'BYROW')
   # Map var names
   t_VARNAME = r'\[.*?\]'
   t_CONSTANT = r'\d+'
-  t_STRING = r'\"[a-zA-Z0-9]*\"'
+  t_STRING = r'\"[\u4e00-\u9fa5a-zA-Z0-9\;]*\"'
   # Map operators and symbols
   t_PLUS = r'\+'
   t_MINUS = r'-'
@@ -246,6 +311,7 @@ class Excel2Pd(PLYParser):
   t_NE = r'\<\>'
   t_AND = r'\&'
   t_OR = r'\|'
+  t_COUNTIF = r'\"[><[<>]]?\[?[a-zA-Z0-9]*\]?\"'
   # Map function use token decorator
   @staticmethod
   @lex.TOKEN('|'.join(excel_funs))
@@ -275,6 +341,8 @@ class Excel2Pd(PLYParser):
   def p_expr(p):
     """expr : term
                | condition expr expr
+               | varname string string
+               | varname constant constant
                | expr PLUS expr
                | expr MINUS expr
                | expr TIMES expr
@@ -371,12 +439,16 @@ class Excel2Pd(PLYParser):
                 | function_bycol
                 | constant
                 | string
+                | term COUNTIF
                 | varname term
                 | function term
                 | function_bycol term"""
     if len(p) > 2:
       # Combine columns
-      p[0] = pd.concat([p[1], p[2]], axis=1)
+      if isinstance(p[2], pd.Series) or isinstance(p[2], pd.DataFrame):
+        p[0] = pd.concat([p[1], p[2]], axis=1)
+      else:
+        p[0] = {"condition": p[1], "value": p[2]}
     else:
       p[0] = p[1]
 

@@ -18,12 +18,14 @@ configs = {'col1': 'ABS( MAX([经度]::) )',
        'col9': 'MEDIAN([经度]::)',
        'col10': 'MIN(MAX([经度]::), [纬度], MIN([距离]::))',
        'col11': 'IF([经度] > 5, \"yes\", \"no\")',
-       'col12': 'LEN([经度])*5',
+       'col12': '5*LEN([经度])',
        'col13': 'IF([经度] == 5, 5, 6)',
        'col14': 'IF([地址] == \"\", \"yes\", \"no\")',
        'col15': 'STDEV.P([经度])',
        'col16': 'STDEV.S([经度])',
-
+       'col17': 'SUBSTITUTE([地址], \"K\", \"不不\")',
+       'col18': 'COUNTIF([地址], \"K\")',
+       'col19': 'COUNTIF([距离], \">5\")'
        }
-df_new = excel2pd.Excel2Pd(configs, df).calc()
+df_new, error_list= excel2pd.Excel2Pd(configs, df).calc()
 print(df_new)
